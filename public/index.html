@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-ui="claude" data-anim="full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Trojan</title>
+  <meta name="description" content="Trojan — agente local com acesso real ao computador.">
+  <meta name="theme-color" content="#F7F5EF">
+  <script>
+    try {
+      var animLevel = localStorage.getItem('trojan.anim');
+      if (['full', 'balanced', 'subtle', 'off'].indexOf(animLevel) >= 0) {
+        document.documentElement.setAttribute('data-anim', animLevel);
+      }
+    } catch (error) { /* localStorage indisponivel */ }
+  </script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-knight" viewBox="0 0 45 45">
+    <path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18 M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,9.506 13.5,8.5 13.5,7.5 C 14.5,6.5 16.5,10 16.5,10 L 18.5,10 C 18.5,10 19.28,8.008 21,7 C 22,7 22,10 22,10" fill="currentColor"/>
+  </symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.6A8.6 8.6 0 1 1 9.4 4a7 7 0 0 0 10.6 10.6Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="m6.5 9 3 3-3 3M12.5 15h5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V5h5v2M7 7l1 13h8l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5H6a2 2 0 0 0-2 2v9"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M17 5h2v2M15 7h2v2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.4 5.6M20 5v6h-6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3Z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 6h11M8.5 12h11M8.5 18h11"/><circle cx="4.4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.4" cy="18" r="1.1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17Z"/><path d="M14.5 6.5 17.5 9.5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 2v3M14 2v3M10 19v3M14 19v3M2 10h3M2 14h3M19 10h3M19 14h3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.2 7 10 4-1.8 7-5.5 7-10V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.4 3.8 5.4 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.4-3.8-9S9.5 5.4 12 3Z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5Z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 8v5M12 16.5v.1"/><path d="M10.3 3.9 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></symbol>
+  <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2"/><path d="M9 5V3h6v2M9 10h6M9 14h6M9 18h4"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9a14 14 0 0 1 18 0M6.5 12.5a9 9 0 0 1 11 0M10 16a4 4 0 0 1 4 0M12 19.5v.1"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 18h16M6 18l2-6 4 2 5-7 1 4 2 1-3 6" fill="none"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="brand">
+        <span class="brand-mark"><svg><use href="#i-knight"/></svg></span>
+        <span class="brand-name">Trojan</span>
+      </div>
+      <button class="icon-btn ghost" id="collapseSidebar" title="Recolher painel" aria-label="Recolher painel">
+        <svg><use href="#i-panel"/></svg>
+      </button>
+    </div>
+
+    <button class="new-chat" id="newChat">
+      <svg class="ico"><use href="#i-plus"/></svg>
+      <span>Novo chat</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+
+    <button class="chat-all" id="allChatsBtn" type="button" title="Listar todas as conversas">
+      <svg class="ico"><use href="#i-list"/></svg>
+      <span>Todas as conversas</span>
+      <span class="chat-all-count" id="allChatsCount">0</span>
+    </button>
+
+    <div class="chat-list-head">
+      <span class="chat-list-label">Pastas</span>
+      <button class="icon-btn small" id="newFolderBtn" type="button" title="Nova pasta" aria-label="Nova pasta">
+        <svg><use href="#i-plus"/></svg>
+      </button>
+    </div>
+
+    <div class="chat-list" id="chatList" aria-label="Conversas"></div>
+
+    <div class="sidebar-foot">
+      <div class="sys-card sys-card-click" id="sysCard" role="button" tabindex="0" title="Clique para ver todas as informações do PC">
+        <div class="sys-row">
+          <span class="sys-label">CPU</span>
+          <span class="sys-value" id="cpuValue">—</span>
+        </div>
+        <div class="sys-bar"><i id="cpuBar"></i></div>
+        <div class="sys-row">
+          <span class="sys-label">RAM</span>
+          <span class="sys-value" id="ramValue">—</span>
+        </div>
+        <div class="sys-bar"><i id="ramBar"></i></div>
+        <div class="sys-host" id="sysHost">local · clique para detalhes</div>
+      </div>
+      <button class="settings-btn" id="openSettings">
+        <svg class="ico"><use href="#i-settings"/></svg>
+        <span>Configurações</span>
+        <span class="keys-state" id="keysState">0 IAs</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+  <main class="main" id="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="openSidebar" aria-label="Abrir painel">
+        <svg><use href="#i-menu"/></svg>
+      </button>
+
+      <div class="model-anchor">
+        <button class="model-pill" id="modelPill" aria-haspopup="listbox" aria-expanded="false">
+          <span class="model-dot" id="modelDot"></span>
+          <span class="model-label" id="modelLabel">Selecionar modelo</span>
+          <svg class="chev"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="memory-pill" id="memoryPill" hidden>
+          <svg><use href="#i-sparkle"/></svg>
+          <span id="memoryPillText">memória</span>
+        </button>
+      </div>
+
+      <div class="top-right">
+        <span class="token-pill" id="tokenPill" title="Tokens da conversa: total gasto (entrada + saída) e contexto restante estimado. ~ indica estimativa quando o provedor não envia usage.">
+          <span class="token-k">gastos</span><strong id="tokenUsed">0</strong>
+          <span class="token-sep">·</span>
+          <span class="token-k">restam</span><strong id="tokenLeft">—</strong>
+        </span>
+        <span class="conn-pill" id="connPill"><span class="status-dot"></span><span id="connText">conectando</span></span>
+        <button class="icon-btn" id="themeToggle" title="Alternar tema" aria-label="Alternar tema">
+          <svg class="theme-moon"><use href="#i-moon"/></svg>
+          <svg class="theme-sun"><use href="#i-sun"/></svg>
+        </button>
+        <button class="icon-btn" id="terminalToggle" title="Terminal (Ctrl J)" aria-label="Terminal">
+          <svg><use href="#i-terminal"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="thread-scroll" id="threadScroll">
+      <div class="thread" id="thread"></div>
+
+      <div class="empty" id="empty">
+        <div class="empty-mark">
+          <span class="mark-ring"></span>
+          <svg class="mark-big"><use href="#i-knight"/></svg>
+        </div>
+        <h1 id="greeting">Boa noite.</h1>
+        <p class="empty-sub">Eu sou o Trojan. Rodo nesta máquina, com shell, arquivos, tela e controle real. O que vamos fazer?</p>
+
+        <div class="suggestions" id="suggestions">
+          <button class="suggestion" data-prompt="Analise meu computador: sistema, hardware, discos e os processos que mais consomem RAM.">
+            <span class="sug-icon"><svg><use href="#i-cpu"/></svg></span>
+            <span class="sug-title">Estado da máquina</span>
+            <span class="sug-sub">Hardware, discos e processos</span>
+          </button>
+          <button class="suggestion" data-prompt="Liste minha pasta Downloads, agrupe os arquivos por tipo e me diga o que está ocupando mais espaço.">
+            <span class="sug-icon"><svg><use href="#i-folder"/></svg></span>
+            <span class="sug-title">Arrumar Downloads</span>
+            <span class="sug-sub">Inventário e limpeza</span>
+          </button>
+          <button class="suggestion" data-prompt="Tire um screenshot da minha tela e me diga exatamente o que está aberto agora.">
+            <span class="sug-icon"><svg><use href="#i-image"/></svg></span>
+            <span class="sug-title">Ver minha tela</span>
+            <span class="sug-sub">Screenshot e análise</span>
+          </button>
+          <button class="suggestion" data-prompt="Escreva um script PowerShell que encontre os 20 maiores arquivos do meu disco C: e mostre o resultado formatado.">
+            <span class="sug-icon"><svg><use href="#i-terminal"/></svg></span>
+            <span class="sug-title">Script sob medida</span>
+            <span class="sug-sub">PowerShell que funciona</span>
+          </button>
+        </div>
+
+        <div class="empty-hint" id="emptyHint">Conecte uma IA no seletor acima para começar.</div>
+      </div>
+    </section>
+
+    <footer class="composer-wrap">
+      <div class="composer" id="composer">
+        <div class="attachment-preview" id="attachmentPreview" hidden></div>
+        <div class="skill-menu" id="skillMenu" hidden>
+          <div class="skill-menu-head">
+            <span>Skills</span>
+            <span class="skill-menu-hint">↑↓ navegar · Enter usar · Esc fechar</span>
+          </div>
+          <div class="skill-menu-list" id="skillMenuList"></div>
+          <div class="skill-menu-foot">Digite <strong>/</strong> para filtrar. Instale mais na aba Skills das configurações.</div>
+        </div>
+        <textarea id="input" rows="1" placeholder="Pergunte, mande executar, cole um erro... (/ para skills)" spellcheck="false"></textarea>
+        <div class="composer-bar">
+          <div class="composer-left">
+            <button class="chip agent-chip" id="agentPill" aria-haspopup="listbox" aria-expanded="false" title="Escolher agente">
+              <svg class="ico"><use href="#i-sparkle"/></svg>
+              <span class="chip-label" id="agentLabel">agente</span>
+              <svg class="chev chip-chev"><use href="#i-chevron"/></svg>
+            </button>
+            <button class="chip" id="terminalChip" title="Abrir terminal">
+              <svg class="ico"><use href="#i-terminal"/></svg>
+              <span>terminal</span>
+            </button>
+            <button class="chip" id="reWorkbenchBtn" title="Engenharia Reversa" type="button">
+              <svg class="ico"><use href="#i-cpu"/></svg>
+              <span>RE</span>
+            </button>
+            <label class="switch-chip" title="Ferramentas executam sem pedir confirmação">
+              <input type="checkbox" id="autoApprove" checked>
+              <span class="switch"><i></i></span>
+              <span>auto</span>
+            </label>
+            <button class="chip attach-chip" id="attachBtn" title="Anexar arquivo ou imagem" type="button">
+              <svg class="ico"><use href="#i-file"/></svg>
+              <span>anexar</span>
+            </button>
+            <input type="file" id="fileInput" multiple hidden accept="image/*,.pdf,.txt,.md,.json,.csv,.zip,.js,.ts,.py,.html,.css,.rs,.go,.c,.cpp,.java,.xml,.yml,.yaml,.log">
+          </div>
+          <div class="composer-right">
+            <span class="composer-hint">Enter envia</span>
+            <button class="send" id="send" disabled aria-label="Enviar">
+              <svg class="send-icon"><use href="#i-arrow-up"/></svg>
+              <svg class="stop-icon"><use href="#i-stop"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="disclaimer">Trojan executa comandos reais neste PC. O que você pedir, acontece.</div>
+    </footer>
+  </main>
+
+  <aside class="terminal-panel" id="terminalPanel" aria-hidden="true">
+    <div class="term-inner">
+      <div class="term-head">
+        <div class="term-title">
+          <span class="term-led" id="termLed"></span>
+          <span>Terminal</span>
+          <span class="term-host" id="termHost">local</span>
+        </div>
+        <div class="term-actions">
+          <button class="term-icon" id="clearTerm" title="Limpar">
+            <svg><use href="#i-trash"/></svg>
+          </button>
+          <button class="term-icon" id="closeTerm" title="Fechar">
+            <svg><use href="#i-x"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="term-log" id="termLog">
+        <div class="term-welcome">Trojan shell · PowerShell<br><span>digite um comando abaixo ou peça no chat</span></div>
+      </div>
+      <form class="term-form" id="termForm">
+        <span class="term-prompt">PS&gt;</span>
+        <input id="termInput" autocomplete="off" spellcheck="false" placeholder="Get-Process | Sort CPU -Desc | Select -First 5">
+        <button type="submit" class="term-run">executar</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<div class="popover" id="modelPopover" hidden>
+  <div class="popover-head">
+    <span class="popover-title">Modelos</span>
+    <button class="icon-btn small" id="closeModel" aria-label="Fechar">
+      <svg><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="popover-search">
+    <svg class="ico"><use href="#i-search"/></svg>
+    <input id="modelSearch" placeholder="Buscar modelo ou provedor" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="model-list" id="modelList"></div>
+  <div class="popover-foot">
+    <button id="manageConnections">Gerenciar conexões</button>
+    <span id="modelCount"></span>
+  </div>
+</div>
+
+<div class="popover agent-popover" id="agentPopover" hidden>
+  <div class="popover-head">
+    <span class="popover-title">Agentes</span>
+    <button class="icon-btn small" id="closeAgent" aria-label="Fechar">
+      <svg><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="agent-list" id="agentList"></div>
+  <div class="popover-foot">
+    <button id="manageAgents">Gerenciar agentes</button>
+    <span id="agentCount"></span>
+  </div>
+</div>
+
+<div class="modal" id="settingsModal" aria-hidden="true">
+  <div class="modal-scrim" data-close-settings></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Configurações">
+    <header class="modal-head">
+      <div>
+        <div class="modal-eyebrow">Trojan</div>
+        <h2>Configurações</h2>
+      </div>
+      <button class="icon-btn" data-close-settings aria-label="Fechar">
+        <svg><use href="#i-x"/></svg>
+      </button>
+    </header>
+
+    <nav class="tabs" id="settingsTabs">
+      <button data-tab="providers" class="active">Conexões</button>
+      <button data-tab="agents">Agentes</button>
+      <button data-tab="skills">Skills</button>
+      <button data-tab="customize">Personalização</button>
+      <button data-tab="prefs">Preferências</button>
+      <button data-tab="about">Sobre</button>
+    </nav>
+
+    <div class="modal-body">
+      <section class="tab-panel active" data-panel="providers">
+        <div class="panel-intro">
+          <h3>Suas IAs</h3>
+          <p>Cole a API key de cada provedor. As chaves ficam só neste PC, em <code>config.json</code>. Cada modelo conectado aparece no seletor do topo.</p>
+        </div>
+        <div class="provider-list" id="providerList"></div>
+        <button class="add-conn" id="addConnection">
+          <svg class="ico"><use href="#i-plus"/></svg>
+          <span>Adicionar conexão personalizada</span>
+        </button>
+        <form class="custom-form" id="customForm" hidden>
+          <div class="custom-grid">
+            <label>Nome<input id="customName" placeholder="Meu servidor" required></label>
+            <label>Tipo
+              <select id="customKind">
+                <option value="openai">OpenAI-compatible</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="google">Google</option>
+              </select>
+            </label>
+          </div>
+          <label>Base URL<input id="customUrl" placeholder="http://localhost:1234/v1" required spellcheck="false"></label>
+          <label>API key (opcional para local)<input id="customKey" type="password" placeholder="sk-..." spellcheck="false"></label>
+          <div class="custom-actions">
+            <button type="button" class="ghost-btn" id="cancelCustom">Cancelar</button>
+            <button type="submit" class="primary-btn small">Adicionar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="tab-panel" data-panel="agents">
+        <div class="panel-intro">
+          <h3>Agentes</h3>
+          <p>Um agente é um arquivo <code>.md</code> em <code>agents/</code>. A definição vira a persona e as regras do sistema quando ele está ativo. O Trojan já vem com o <strong>Lunar</strong> e o <strong>Irrestrito</strong>.</p>
+        </div>
+        <div class="agent-settings-list" id="settingsAgentList"></div>
+        <div class="agent-panel-actions">
+          <button class="add-conn" id="addAgent">
+            <svg class="ico"><use href="#i-plus"/></svg>
+            <span>Novo agente</span>
+          </button>
+          <button class="ghost-btn" id="refreshAgents">Recarregar arquivos</button>
+        </div>
+        <form class="custom-form agent-form" id="agentForm" hidden>
+          <div class="agent-form-head">
+            <strong id="agentFormTitle">Novo agente</strong>
+            <span>O frontmatter é gerado automaticamente.</span>
+          </div>
+          <div class="custom-grid">
+            <label>Nome<input id="agentName" maxlength="80" placeholder="Lunar" required></label>
+            <label>Modo
+              <select id="agentMode">
+                <option value="primary">Primary</option>
+                <option value="secondary">Secondary</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+          </div>
+          <label>Descrição<input id="agentDescription" maxlength="200" placeholder="Uma linha sobre o que este agente faz."></label>
+          <label>Definição (markdown)
+            <textarea id="agentContent" rows="13" placeholder="# Nome do agente&#10;&#10;## Princípios&#10;- ..." spellcheck="false" required></textarea>
+          </label>
+          <div class="custom-actions">
+            <button type="button" class="ghost-btn" id="cancelAgent">Cancelar</button>
+            <button type="submit" class="primary-btn small" id="saveAgent">Salvar agente</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="tab-panel" data-panel="skills">
+        <div class="panel-intro">
+          <h3>Skills</h3>
+          <p>Instale skills externas no formato Claude/OpenCode (pasta com <code>SKILL.md</code>). Aceita repositório GitHub, pasta, arquivo <code>.zip</code>, <code>SKILL.md</code> cru ou caminho local. Depois digite <strong>/</strong> no chat para escolher.</p>
+        </div>
+        <form class="skill-install-form" id="skillInstallForm">
+          <input id="skillSource" placeholder="https://github.com/dono/repo  ·  caminho local  ·  URL de zip/SKILL.md" spellcheck="false" autocomplete="off">
+          <button class="primary-btn small" id="skillInstallBtn" type="submit">Instalar</button>
+        </form>
+        <div class="skill-settings-list" id="settingsSkillList">
+          <div class="skill-empty">Carregando skills...</div>
+        </div>
+      </section>
+
+      <section class="tab-panel" data-panel="customize">
+        <div class="panel-intro">
+          <h3>Personalização</h3>
+          <p>Escolha o estilo completo da interface (Claude, Gemini, Grok, ChatGPT) e ajuste as cores dos widgets/botões, cartões e barra lateral.</p>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Estilo da interface</label>
+            <p>Muda <strong>toda</strong> a interface (layout visual, tipografia, formas, cores e componentes) para se parecer com o app selecionado. Aplicado na hora.</p>
+          </div>
+          <div class="segmented" id="prefInterface" role="group" aria-label="Estilo da interface">
+            <button type="button" data-ui="claude">Claude</button>
+            <button type="button" data-ui="gemini">Gemini</button>
+            <button type="button" data-ui="grok">Grok</button>
+            <button type="button" data-ui="chatgpt">ChatGPT</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefAccentColor">Cor de destaque (widgets/botões)</label>
+            <p>Cor principal de botões, destaques e controles. Vazio = usar a cor do estilo selecionado.</p>
+          </div>
+          <div class="color-row">
+            <input id="prefAccentColor" type="color" value="#c96442" aria-label="Cor de destaque">
+            <button type="button" class="ghost-btn" id="resetAccentColor">Usar padrão do estilo</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefWidgetColor">Cor dos cartões/widgets</label>
+            <p>Fundo de cartões e áreas elevadas. Vazio = padrão do estilo.</p>
+          </div>
+          <div class="color-row">
+            <input id="prefWidgetColor" type="color" value="#fcfbf7" aria-label="Cor dos widgets">
+            <button type="button" class="ghost-btn" id="resetWidgetColor">Usar padrão do estilo</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefSidebarColor">Cor da barra lateral</label>
+            <p>Fundo da sidebar. Vazio = padrão do estilo.</p>
+          </div>
+          <div class="color-row">
+            <input id="prefSidebarColor" type="color" value="#efece4" aria-label="Cor da barra lateral">
+            <button type="button" class="ghost-btn" id="resetSidebarColor">Usar padrão do estilo</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Gradiente / degrade (fundo do app)</label>
+            <p>Aplica um degrade de cores no fundo do aplicativo. Escolha as duas cores e a direção.</p>
+          </div>
+          <div class="color-row">
+            <input id="prefGradientFrom" type="color" value="#191918" aria-label="Cor inicial do gradiente">
+            <input id="prefGradientTo" type="color" value="#2a2a4a" aria-label="Cor final do gradiente">
+            <select id="prefGradientDir" aria-label="Direção do gradiente">
+              <option value="to bottom">Vertical</option>
+              <option value="to right">Horizontal</option>
+              <option value="135deg">Diagonal</option>
+              <option value="to top right">Diagonal inversa</option>
+              <option value="circle at center">Radial</option>
+            </select>
+            <button type="button" class="ghost-btn" id="resetGradient">Desativar</button>
+          </div>
+        </div>
+
+        <button class="primary-btn" id="saveCustomize">Salvar personalização</button>
+      </section>
+
+      <section class="tab-panel" data-panel="prefs">
+        <div class="setting vertical">
+          <label for="prefOperatorName">Seu nome</label>
+          <p>Como o Trojan te chama no chat e nas respostas. Vazio volta ao padrão: bellatozx.</p>
+          <input id="prefOperatorName" maxlength="60" placeholder="bellatozx" spellcheck="false" autocomplete="off">
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefAuto">Execução automática</label>
+            <p>Ferramentas rodam sem pedir confirmação. Desligue para aprovar cada comando.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="prefAuto">
+            <span class="switch-track"><i></i></span>
+          </label>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefAutoRun">Auto-executor</label>
+            <p>Executa automaticamente a mensagem base em um chat novo/vazio quando o Trojan estiver pronto.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="prefAutoRun">
+            <span class="switch-track"><i></i></span>
+          </label>
+        </div>
+
+        <div class="setting vertical">
+          <label for="prefAutoRunMessage">Mensagem base do auto-executor</label>
+          <p>A IA usa este texto como base. Ex.: “verifique o status do sistema, processos pesados e disco, e me dê um resumo objetivo”.</p>
+          <textarea id="prefAutoRunMessage" rows="5" placeholder="Descreva a tarefa que o Trojan deve executar automaticamente..." spellcheck="false"></textarea>
+        </div>
+
+        <div class="setting vertical">
+          <label for="prefCwd">Diretório de trabalho</label>
+          <p>Base para comandos e arquivos. Vazio = sua pasta de usuário.</p>
+          <input id="prefCwd" placeholder="C:\Users\você" spellcheck="false">
+        </div>
+
+        <div class="setting vertical">
+          <label for="prefSystem">Prompt de sistema extra</label>
+          <p>Regras extras injetadas em toda conversa.</p>
+          <textarea id="prefSystem" rows="5" placeholder="Ex: responda curto, prefira TypeScript, nunca use emojis..." spellcheck="false"></textarea>
+        </div>
+
+
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Animações</label>
+            <p>Intensidade do movimento da interface. Máximo liga fundo em movimento, entradas, brilhos e pulsos; Off congela tudo.</p>
+            <div class="anim-demo" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="segmented" id="prefAnimation" role="group" aria-label="Intensidade das animações">
+            <button type="button" data-anim-level="full">Máximo</button>
+            <button type="button" data-anim-level="balanced">Médio</button>
+            <button type="button" data-anim-level="subtle">Sutil</button>
+            <button type="button" data-anim-level="off">Off</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Tema</label>
+            <p>Claro ou escuro, aplicado na hora.</p>
+          </div>
+          <div class="segmented" id="prefTheme">
+            <button type="button" data-theme="light">Claro</button>
+            <button type="button" data-theme="dark">Escuro</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label for="prefFast">Turbo</label>
+            <p>Desliga o raciocínio interno dos modelos que aceitam esse controle e corta o caminho até a resposta. É o que evita esperas de minutos. Se o provedor recusar, o Trojan volta sozinho para o modo normal.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="prefFast" checked>
+            <span class="switch-track"><i></i></span>
+          </label>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Economia de tokens</label>
+            <p>Controla quanto contexto/tokens cada mensagem e sessão usa. <strong>Máxima</strong>: histórico curto, prompt compacto e saídas menores (mínimo consumo). <strong>Desligada</strong>: sem cortes.</p>
+          </div>
+          <div class="segmented" id="prefTokenSaver" role="group" aria-label="Economia de tokens">
+            <button type="button" data-token-saver="max">Máxima</button>
+            <button type="button" data-token-saver="medium">Média</button>
+            <button type="button" data-token-saver="low">Baixa</button>
+            <button type="button" data-token-saver="off">Desligada</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-copy">
+            <label>Ao iniciar</label>
+            <p>Como o Trojan abre quando iniciado: janela de aplicativo (Edge, sem barra do navegador), navegador normal, ou sem abrir.</p>
+          </div>
+          <div class="segmented" id="prefOpenMode">
+            <button type="button" data-open="app">Aplicativo</button>
+            <button type="button" data-open="browser">Navegador</button>
+            <button type="button" data-open="none">Não abrir</button>
+          </div>
+        </div>
+
+        <button class="primary-btn" id="savePrefs">Salvar preferências</button>
+      </section>
+
+      <section class="tab-panel" data-panel="about">
+        <div class="about-head">
+          <span class="about-mark"><svg><use href="#i-knight"/></svg></span>
+          <div>
+            <h3>Trojan <span class="ver" id="aboutVersion">v1.0.0</span></h3>
+            <p>Agente local para Windows. Sem servidor intermediário: o browser fala direto com este processo, e o processo fala direto com o provedor que você escolher.</p>
+          </div>
+        </div>
+        <div class="cap-grid">
+          <div><svg><use href="#i-terminal"/></svg><span>Shell PowerShell e cmd</span></div>
+          <div><svg><use href="#i-file"/></svg><span>Leitura e escrita de arquivos</span></div>
+          <div><svg><use href="#i-image"/></svg><span>Screenshot da tela</span></div>
+          <div><svg><use href="#i-mouse"/></svg><span>Mouse e teclado</span></div>
+          <div><svg><use href="#i-clipboard"/></svg><span>Clipboard</span></div>
+          <div><svg><use href="#i-cpu"/></svg><span>Hardware e processos</span></div>
+        </div>
+        <p class="about-credit">Criado por <strong>bellatozx</strong>.</p>
+        <div class="about-note">
+          <svg class="ico"><use href="#i-shield"/></svg>
+          <p>As chaves são gravadas em <code>config.json</code> na pasta do app. O servidor escuta apenas em <strong>127.0.0.1</strong>, com checagem de origem. Nenhum dado sai daqui além das conversas enviadas ao provedor escolhido.</p>
+        </div>
+        <p class="tiny">Motor <span id="aboutNode">—</span> · <span id="aboutPlatform">—</span></p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="pcInfoModal" aria-hidden="true">
+  <div class="modal-scrim" data-close-pcinfo></div>
+  <div class="modal-card pcinfo-card" role="dialog" aria-modal="true" aria-label="Informações do PC">
+    <header class="modal-head">
+      <div>
+        <div class="modal-eyebrow">Sistema</div>
+        <h2>Informações do PC</h2>
+        <div class="pcinfo-meta" id="pcInfoMeta">Clique em CPU/RAM para atualizar</div>
+      </div>
+      <div class="pcinfo-head-actions">
+        <button class="ghost-btn pcinfo-refresh" id="pcInfoRefresh" type="button">Atualizar</button>
+        <button class="icon-btn" data-close-pcinfo aria-label="Fechar"><svg><use href="#i-x"/></svg></button>
+      </div>
+    </header>
+    <div class="pcinfo-body">
+      <nav class="pcinfo-tabs" id="pcInfoTabs" aria-label="Abas de informações"></nav>
+      <div class="pcinfo-content" id="pcInfoContent">
+        <div class="pcinfo-empty">Carregando informações do sistema...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="chatsModal" aria-hidden="true">
+  <div class="modal-scrim" data-close-chats></div>
+  <div class="modal-card chats-card" role="dialog" aria-modal="true" aria-label="Conversas">
+    <header class="modal-head">
+      <div>
+        <div class="modal-eyebrow">Trojan · Arquivo</div>
+        <h2 id="chatsModalTitle">Todas as conversas</h2>
+      </div>
+      <button class="icon-btn" type="button" data-close-chats aria-label="Fechar">
+        <svg><use href="#i-x"/></svg>
+      </button>
+    </header>
+    <div class="chats-search-row">
+      <label class="chats-search">
+        <svg><use href="#i-search"/></svg>
+        <input id="chatsSearch" type="search" placeholder="Buscar por título ou mensagem" autocomplete="off" spellcheck="false">
+      </label>
+      <span class="chats-count" id="chatsCount"></span>
+    </div>
+    <div class="modal-body chats-body">
+      <div class="chats-list" id="chatsModalList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="folderModal" aria-hidden="true">
+  <div class="modal-scrim" data-close-folder></div>
+  <div class="modal-card folder-card" role="dialog" aria-modal="true" aria-label="Nova pasta">
+    <header class="modal-head">
+      <div>
+        <div class="modal-eyebrow">Organização</div>
+        <h2 id="folderModalTitle">Nova pasta</h2>
+      </div>
+      <button class="icon-btn" type="button" data-close-folder aria-label="Fechar">
+        <svg><use href="#i-x"/></svg>
+      </button>
+    </header>
+    <form class="folder-form" id="folderForm">
+      <label class="folder-field">
+        <span>Nome da pasta</span>
+        <input id="folderNameInput" type="text" maxlength="60" placeholder="Trabalho, Estudos, Projetos..." autocomplete="off" spellcheck="false" required>
+      </label>
+      <div class="folder-actions">
+        <button class="ghost-btn" type="button" data-close-folder>Cancelar</button>
+        <button class="primary-btn small" type="submit" id="folderSubmit">Criar pasta</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="auth-gate" id="authGate" hidden>
+  <div class="auth-shell">
+    <section class="auth-showcase" aria-label="Apresentação do Trojan">
+      <div class="auth-showcase-bg"></div>
+      <div class="auth-brandrow">
+        <img class="auth-logo" src="/favicon.svg" alt="Trojan">
+        <div>
+          <div class="auth-kicker">Trojan Local Agent</div>
+          <div class="auth-brandname">Acesso seguro ao seu app</div>
+        </div>
+      </div>
+
+      <div class="auth-gallery">
+        <figure class="auth-shot auth-shot-main">
+          <div class="auth-shot-top"><span></span><span></span><span></span><b>Trojan — Workspace</b></div>
+          <div class="auth-shot-body">
+            <div class="auth-shot-side">
+              <div class="a-line w70"></div><div class="a-line"></div><div class="a-line w50"></div>
+              <div class="a-pill"></div><div class="a-line"></div><div class="a-line w60"></div>
+            </div>
+            <div class="auth-shot-chat">
+              <div class="a-msg a-user"><div class="a-line w60"></div></div>
+              <div class="a-msg a-ai"><img src="/favicon.svg" alt=""><div><div class="a-line"></div><div class="a-line w80"></div><div class="a-line w50"></div></div></div>
+              <div class="a-tool"><span>shell</span><div class="a-line w70"></div></div>
+              <div class="a-compose"><div class="a-line"></div></div>
+            </div>
+          </div>
+          <figcaption>Interface do chat com ferramentas locais</figcaption>
+        </figure>
+
+        <figure class="auth-shot auth-shot-float">
+          <img src="/favicon.svg" alt="Ícone Trojan">
+          <strong>Trojan</strong>
+          <span>Agente local • Windows • Shell, arquivos, tela e automação</span>
+          <figcaption>Identidade visual</figcaption>
+        </figure>
+
+        <figure class="auth-shot auth-shot-cards">
+          <div class="auth-mini"><b>Interfaces</b><small>Claude · Gemini · Grok · ChatGPT</small></div>
+          <div class="auth-mini"><b>Modo aplicativo</b><small>Janela dedicada, sem navegador comum</small></div>
+          <div class="auth-mini accent"><b>Protegido por key</b><small>Ativação obrigatória no servidor</small></div>
+          <figcaption>Recursos do produto</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="auth-panel" aria-label="Ativação">
+      <div class="auth-panel-card">
+        <div class="auth-mark"><svg><use href="#i-knight"/></svg></div>
+        <h2>Ativar Trojan</h2>
+        <p>Digite sua key de acesso para liberar o app nesta sessão.</p>
+        <form id="authForm" class="auth-form">
+          <label class="auth-label" for="authKey">Key de ativação</label>
+          <input id="authKey" type="password" placeholder="TRJ-..." autocomplete="off" spellcheck="false" aria-label="Key de ativação">
+          <button type="submit" class="primary-btn auth-submit" id="authSubmit">Entrar e ativar</button>
+        </form>
+        <p class="auth-error" id="authError" hidden></p>
+        <div class="auth-note">Servidor local protegido • API e WebSocket exigem ativação</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<noscript><div class="noscript">Trojan precisa de JavaScript para rodar.</div></noscript>
+<script src="/app.js" defer></script>
+</body>
+<!-- Reverse Engineering Workbench -->
+<div class="modal" id="reWorkbenchModal" aria-hidden="true">
+  <div class="modal-scrim" data-close-re></div>
+  <div class="modal-card re-card" role="dialog" aria-modal="true" aria-label="Reverse Engineering Workbench">
+    <header class="modal-head">
+      <div>
+        <div class="modal-eyebrow">Trojan � RE Workbench</div>
+        <h2>Engenharia Reversa</h2>
+      </div>
+      <button class="icon-btn" data-close-re aria-label="Fechar"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <div class="re-body">
+      <div class="re-sidebar">
+        <div class="re-sidebar-head">
+          <h3>Apps Instalados</h3>
+          <button class="ghost-btn small" id="reRefreshApps">Atualizar</button>
+        </div>
+        <div class="re-app-list" id="reAppList"></div>
+        <div class="re-browse-section">
+          <h3>Navegar Pastas</h3>
+          <div class="re-browse-path">
+            <input id="reBrowsePath" placeholder="C:\caminho\para\pasta" spellcheck="false">
+            <button class="ghost-btn small" id="reBrowseBtn">Ir</button>
+          </div>
+          <div class="re-file-list" id="reFileList"></div>
+        </div>
+      </div>
+      <div class="re-main">
+        <div class="re-main-head">
+          <h3 id="reTargetName">Selecione um app ou arquivo</h3>
+          <button class="primary-btn small" id="reAnalyzeBtn" disabled>Analisar</button>
+        </div>
+        <div class="re-results" id="reResults">
+          <div class="re-empty">Selecione um aplicativo da lista ou navegue ate um arquivo para analisar.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</html>
