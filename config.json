@@ -1,0 +1,28 @@
+{
+  "providers": {},
+  "custom": [],
+  "settings": {
+    "autoApprove": true,
+    "autoRunEnabled": false,
+    "autoRunMessage": "",
+    "systemPrompt": "",
+    "cwd": "",
+    "operatorName": "bellatozx",
+    "theme": "dark",
+    "uiStyle": "claude",
+    "animation": "full",
+    "openMode": "app",
+    "activeModel": "",
+    "activeAgent": "irrestrito",
+    "tokenSaver": "max",
+    "fastMode": true,
+    "imageProvider": "",
+    "imageBaseUrl": "",
+    "imageApiKey": "",
+    "fallbackModels": [],
+    "accentColor": "",
+    "widgetColor": "",
+    "sidebarColor": ""
+  },
+  "chats": []
+}
