@@ -1,0 +1,3 @@
+4317
+root=C:\Users\track\AppData\Local\Temp\opencode\trojan-final
+public=C:\Users\track\AppData\Local\Temp\opencode\trojan-final\public
