@@ -47,13 +47,36 @@ Abra o PowerShell e cole:
 irm https://raw.githubusercontent.com/pbellato2-lgtm/local-agent/main/install.ps1 | iex
 ```
 
-### Atualizacao
+### Atualizacao (preserva seus dados)
+
+Atualizacao normal - substitui o app, o frontend e os scripts, mas preserva `config.json` (suas chaves), `session_memory.json` (conversas) e a pasta `skills/`:
 
 ```powershell
 irm https://raw.githubusercontent.com/pbellato2-lgtm/local-agent/main/update.ps1 | iex
 ```
 
-A atualizacao detecta a pasta instalada, compara hash, preserva config.json, skills/ e session_memory.json.
+O script detecta a pasta instalada (app aberto ou procura `Trojan.exe` no perfil, Desktop, Documentos e Downloads), baixa o release mais recente, faz backup dos seus dados e restaura tudo ao final. Se houver mais de uma copia, usa a mais recente e avisa.
+
+Reinstalacao limpa - remove arquivos obsoletos da instalacao (lixo de versoes antigas, `public/` desatualizado) e baixa tudo do zero, mas ainda preserva `config.json`, `session_memory.json`, `skills/` e os dados do WebView2 (chats e pastas):
+
+```powershell
+irm https://raw.githubusercontent.com/pbellato2-lgtm/local-agent/main/clean-reinstall.ps1 | iex
+```
+
+Use a reinstalacao limpa quando a atualizacao normal nao resolver (ex.: barra preta, UI quadrada, arquivos antigos no `public/`).
+
+Se precisar forcar uma pasta especifica:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/pbellato2-lgtm/local-agent/main/clean-reinstall.ps1))) -InstallDir 'C:\caminho\da\pasta' -NoLaunch
+```
+
+Se o cache do CDN estiver atrasado, baixe o arquivo direto:
+
+```powershell
+iwr https://raw.githubusercontent.com/pbellato2-lgtm/local-agent/main/clean-reinstall.ps1 -OutFile $env:TEMP\clean-reinstall.ps1
+powershell -ExecutionPolicy Bypass -File $env:TEMP\clean-reinstall.ps1
+```
 
 ### Compilar manualmente
 
