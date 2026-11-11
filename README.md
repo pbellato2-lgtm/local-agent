@@ -26,6 +26,7 @@ Agente de IA local para Windows. Aplicativo nativo em Rust com interface WebView
 - **Modo Irrestrito** - agente padrao sem limitacoes de conteudo
 - **Interface adaptavel** - tema claro/escuro, estilos de UI e niveis de animacao em Preferencias
 - **Personalizacao com gradiente** - degrade de cores no fundo do app, salvo automaticamente
+- **Terminal integrado** - PowerShell, CMD e WSL com sessao persistente e modo administrador (UAC)
 
 ## Download
 
@@ -76,6 +77,23 @@ cargo build --release
 
 As chaves ficam somente neste PC, em config.json, ao lado do executavel.
 
+## Terminal
+
+O painel Terminal (botao Terminal no topo) abre um shell real neste PC com tres abas:
+
+| Aba | Shell | Observacao |
+|-----|-------|------------|
+| PowerShell | powershell.exe | comandos rodam inline na sessao, sem abrir processo por comando |
+| CMD | cmd.exe | batch e comandos internos do cmd, com codepage OEM |
+| WSL | wsl.exe | usa a distro padrao instalada |
+
+- Sessao persistente: o diretorio atual e o estado sobrevivem entre comandos. `cd` e `clear`/`cls` sao tratados direto.
+- Historico com seta para cima e para baixo.
+- Botao **usuario** alterna para **ADMIN**. O primeiro clique abre uma sessao elevada unica via UAC; depois cada comando roda nela sem pedir aprovacao de novo. O prompt muda de `>` para `#` e o selo ADMIN aparece na barra.
+- Sair do modo admin volta para a sessao comum, sem fechar o painel.
+
+Os shells rodam como processos locais em `%TEMP%\trojan-shell-user` (usuario) e `%TEMP%\trojan-shell` (admin). Cada um escuta apenas em 127.0.0.1, em porta propria, protegido por token de sessao.
+
 ## Estrutura do Projeto
 
 ```
@@ -87,7 +105,7 @@ local-agent/
   install.ps1          # Instalador one-liner
   update.ps1           # Atualizador one-liner
   trojan.ico           # Icone do aplicativo
-  config.json          # Criado no primeiro uso (nao versionado)
+  config.json          # Template de configuracao (chaves ficam locais)
 ```
 
 ## Agentes
