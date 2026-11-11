@@ -17,6 +17,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/lab.css">
 </head>
 <body>
 <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -247,8 +248,12 @@
           <span class="term-led" id="termLed"></span>
           <span>Terminal</span>
           <span class="term-host" id="termHost">local</span>
+          <span class="term-badge" id="termBadge" hidden>admin</span>
         </div>
         <div class="term-actions">
+          <button class="term-icon" id="termElevate" title="Elevar terminal (UAC)" aria-label="Elevar terminal">
+            <svg><use href="#i-shield"/></svg>
+          </button>
           <button class="term-icon" id="clearTerm" title="Limpar">
             <svg><use href="#i-trash"/></svg>
           </button>
@@ -257,11 +262,23 @@
           </button>
         </div>
       </div>
+
+      <div class="term-tabs" id="termTabs" role="tablist" aria-label="Shells">
+        <button type="button" class="term-tab active" data-shell="ps" role="tab">PowerShell</button>
+        <button type="button" class="term-tab" data-shell="cmd" role="tab">CMD</button>
+        <button type="button" class="term-tab" data-shell="wsl" role="tab">WSL</button>
+        <span class="term-tab-gap"></span>
+        <button type="button" class="term-admin" id="termAdminToggle" aria-pressed="false" title="Alternar modo administrador (UAC)">
+          <svg><use href="#i-shield"/></svg>
+          <span id="termAdminLabel">usuário</span>
+        </button>
+      </div>
+
       <div class="term-log" id="termLog">
-        <div class="term-welcome">Trojan shell · PowerShell<br><span>digite um comando abaixo ou peça no chat</span></div>
+        <div class="term-welcome">Trojan shell — PowerShell, CMD e WSL<br><span>digite um comando abaixo ou peça no chat</span></div>
       </div>
       <form class="term-form" id="termForm">
-        <span class="term-prompt">PS&gt;</span>
+        <span class="term-prompt" id="termPrompt">PS&gt;</span>
         <input id="termInput" autocomplete="off" spellcheck="false" placeholder="Get-Process | Sort CPU -Desc | Select -First 5">
         <button type="submit" class="term-run">executar</button>
       </form>
