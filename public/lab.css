@@ -1,6 +1,6 @@
 /* ============================================================
-   Lab shell v2 — janela arredondada, aurora e movimento contínuo
-   Carregado depois de styles.css: vence no empate de especificidade.
+   Lab shell v3 — janela tipo macOS: cantos arredondados de verdade,
+   sem barra preta, sem moldura quadrada. Apenas o app.
    ============================================================ */
 
 @property --ring-angle {
@@ -10,42 +10,24 @@
 }
 
 :root {
-  --shell-radius: 20px;
-  --shell-gap: 10px;
+  --shell-radius: 22px;
+  --shell-gap: 0px;
 }
 
-html {
-  background: #0d0d0c;
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--app-gradient, var(--bg));
 }
 
 body {
-  padding: var(--shell-gap);
   background:
     radial-gradient(120% 90% at 10% -12%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 58%),
     radial-gradient(100% 90% at 104% 108%, color-mix(in srgb, var(--accent-bright) 16%, transparent), transparent 56%),
     var(--app-gradient, var(--bg));
   transition: background 0.6s ease;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: -22%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(36% 40% at 26% 28%, color-mix(in srgb, var(--accent) 52%, transparent), transparent 70%),
-    radial-gradient(32% 38% at 76% 70%, color-mix(in srgb, var(--accent-bright) 40%, transparent), transparent 72%);
-  filter: blur(72px) saturate(130%);
-  opacity: 0.34;
-  animation: labAurora 28s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-@keyframes labAurora {
-  0% { transform: translate3d(-3%, -2%, 0) scale(1.02) rotate(-1.5deg); }
-  50% { transform: translate3d(2%, 3%, 0) scale(1.09) rotate(1deg); }
-  100% { transform: translate3d(4%, -1%, 0) scale(1.04) rotate(2deg); }
 }
 
 .app {
@@ -56,11 +38,11 @@ body::before {
   overflow: hidden;
   isolation: isolate;
   box-shadow:
-    0 40px 90px -46px rgba(0, 0, 0, 0.7),
-    0 2px 10px rgba(0, 0, 0, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    0 0 0 1px color-mix(in srgb, var(--accent) 18%, var(--line));
-  transition: border-radius 0.5s var(--ease), box-shadow 0.5s var(--ease);
+    0 30px 80px -40px rgba(0, 0, 0, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px color-mix(in srgb, var(--accent) 16%, var(--line));
+  transition: border-radius 0.4s var(--ease), box-shadow 0.4s var(--ease);
 }
 
 .app::after {
@@ -74,18 +56,18 @@ body::before {
   background: conic-gradient(
     from var(--ring-angle),
     transparent 0deg,
-    color-mix(in srgb, var(--accent) 62%, transparent) 34deg,
+    color-mix(in srgb, var(--accent) 50%, transparent) 34deg,
     transparent 86deg,
     transparent 196deg,
-    color-mix(in srgb, var(--accent-bright) 40%, transparent) 246deg,
+    color-mix(in srgb, var(--accent-bright) 32%, transparent) 246deg,
     transparent 300deg
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  opacity: 0.6;
-  animation: labRing 16s linear infinite;
+  opacity: 0.45;
+  animation: labRing 18s linear infinite;
 }
 
 @keyframes labRing {
@@ -365,8 +347,8 @@ html[data-anim="full"] .msg.user {
 
 @media (max-width: 860px) {
   :root {
+    --shell-radius: 16px;
     --shell-gap: 0px;
-    --shell-radius: 0px;
   }
 
   body::before {
