@@ -176,6 +176,12 @@
     termForm: $('#termForm'),
     termInput: $('#termInput'),
     termHost: $('#termHost'),
+    termTabs: $('#termTabs'),
+    termPrompt: $('#termPrompt'),
+    termBadge: $('#termBadge'),
+    termAdminToggle: $('#termAdminToggle'),
+    termAdminLabel: $('#termAdminLabel'),
+    termElevate: $('#termElevate'),
     modelPopover: $('#modelPopover'),
     closeModel: $('#closeModel'),
     modelSearch: $('#modelSearch'),
@@ -296,6 +302,14 @@
     termOpen: false,
     termHistory: [],
     termIndex: -1,
+    termShell: 'ps',
+    termAdmin: false,
+    termPids: { user: 0, admin: 0 },
+    termPorts: { user: 0, admin: 0 },
+    termTokens: { user: '', admin: '' },
+    termElevating: false,
+    termQueue: Promise.resolve(),
+    termCwd: '',
     execEntries: new Map(),
     sidebarCollapsed: false,
     initialized: false,
@@ -3742,7 +3756,7 @@
      ============================================================ */
 
   const TERM_WELCOME =
-    'Trojan shell · PowerShell<br><span>digite um comando abaixo ou peça no chat</span>';
+    'Trojan shell — PowerShell, CMD e WSL<br><span>digite um comando abaixo, use cd para navegar, ou peça no chat</span>';
 
   function closeMobileSidebar() {
     el.app.classList.remove('sidebar-mobile-open');
@@ -3767,20 +3781,470 @@
     saveUI();
   }
 
+  /* ============================================================
+     Terminal — PowerShell / CMD / WSL + sessão elevada
+     ============================================================ */
+
+  const TERM_TEMP_FOLDER = 'trojan-shell';
+  const TERM_WORKER_VERSION = 'lab-8';
+
+  // Worker elevado: loop de arquivos em %TEMP%\trojan-shell.
+  // Fica residente depois do UAC, então cada comando admin não pede elevação de novo.
+  const TERM_WORKER_SOURCE = [
+    "param([int]$Port = 0)",
+    "",
+    "$ErrorActionPreference = 'Continue'",
+    "$ProgressPreference = 'SilentlyContinue'",
+    "$dir = Split-Path -Parent $MyInvocation.MyCommand.Path",
+    "$utf8 = New-Object System.Text.UTF8Encoding($false)",
+    "$oemEnc = [Console]::OutputEncoding",
+    "$nl = [Environment]::NewLine",
+    "$req = Join-Path $dir 'req.txt'",
+    "$beat = Join-Path $dir 'beat.txt'",
+    "",
+    "$isAdmin = '0'",
+    "try {",
+    "  $wid = [Security.Principal.WindowsIdentity]::GetCurrent()",
+    "  $wp = New-Object Security.Principal.WindowsPrincipal($wid)",
+    "  if ($wp.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { $isAdmin = '1' }",
+    "} catch { }",
+    "",
+    "function Invoke-Job([string]$jobId, [string]$command, [string]$shellName, [string]$startCwd) {",
+    "  if (-not $shellName) { $shellName = 'ps' }",
+    "  if (-not $startCwd) { $startCwd = $env:USERPROFILE }",
+    "  $start = Get-Date",
+    "  $out = ''",
+    "  $code = 0",
+    "  $action = 'run'",
+    "  $cwdOut = $startCwd",
+    "  $text = $command.Trim()",
+    "",
+    "  if ($text -match '^(?i)cd(\\s.*)?$') {",
+    "    $target = $text.Substring(2).Trim()",
+    "    if (-not $target) { $target = $env:USERPROFILE }",
+    "    $resolved = $null",
+    "    try {",
+    "      $target = $ExecutionContext.InvokeCommand.ExpandString($target)",
+    "      Push-Location -LiteralPath $startCwd -ErrorAction SilentlyContinue",
+    "      $resolved = (Resolve-Path -LiteralPath $target -ErrorAction Stop).Path",
+    "    } catch {",
+    "      $out = 'cd: ' + $_.Exception.Message",
+    "      $code = 1",
+    "    } finally {",
+    "      Pop-Location -ErrorAction SilentlyContinue",
+    "    }",
+    "    if ($resolved) {",
+    "      if (Test-Path -LiteralPath $resolved -PathType Leaf) { $resolved = Split-Path -Parent $resolved }",
+    "      $cwdOut = $resolved",
+    "      $action = 'cwd'",
+    "    }",
+    "  } elseif ($text -match '^(?i)(clear|cls)$') {",
+    "    $action = 'clear'",
+    "  } else {",
+    "    $exe = 'powershell.exe'",
+    "    $argLine = ''",
+    "    $bat = ''",
+    "    if ($shellName -eq 'cmd') {",
+    "      $bat = Join-Path $dir ('j-' + $jobId + '.cmd')",
+    "      $body = '@echo off' + $nl + $command + $nl",
+    "      [IO.File]::WriteAllText($bat, $body, $oemEnc)",
+    "      $exe = 'cmd.exe'",
+    "      $argLine = '/d /s /c \"' + $bat + '\"'",
+    "    } elseif ($shellName -eq 'wsl') {",
+    "      $exe = 'wsl.exe'",
+    "      $inner = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($command))",
+    "      $argLine = '-e sh -lc \"echo ' + $inner + ' | base64 -d | sh\"'",
+    "    }",
+    "",
+    "    if ($shellName -eq 'ps') {",
+    "      $prevErr = $Error.Count",
+    "      $global:LASTEXITCODE = 0",
+    "      try { Set-Location -LiteralPath $startCwd -ErrorAction Stop } catch { }",
+    "      try {",
+    "        $sb = [scriptblock]::Create($command)",
+    "        $out = (& $sb 2>&1 | Out-String -Width 4096)",
+    "      } catch {",
+    "        $out += ($_ | Out-String)",
+    "      }",
+    "      if ($LASTEXITCODE -ne 0) { $code = [int]$LASTEXITCODE } elseif ($Error.Count -gt $prevErr) { $code = 1 }",
+    "    } else {",
+    "      try {",
+    "        $limit = 900000",
+    "        if ($shellName -eq 'wsl') { $limit = 120000 }",
+    "        $psi = New-Object System.Diagnostics.ProcessStartInfo",
+    "        $psi.FileName = $exe",
+    "        $psi.Arguments = $argLine",
+    "        $psi.WorkingDirectory = $startCwd",
+    "        $psi.UseShellExecute = $false",
+    "        $psi.CreateNoWindow = $true",
+    "        $psi.RedirectStandardOutput = $true",
+    "        $psi.RedirectStandardError = $true",
+    "        if ($shellName -eq 'cmd') {",
+    "          $psi.StandardOutputEncoding = $oemEnc",
+    "          $psi.StandardErrorEncoding = $oemEnc",
+    "        } else {",
+    "          $psi.StandardOutputEncoding = $utf8",
+    "          $psi.StandardErrorEncoding = $utf8",
+    "        }",
+    "        $proc = [System.Diagnostics.Process]::Start($psi)",
+    "        $outTask = $proc.StandardOutput.ReadToEndAsync()",
+    "        $errTask = $proc.StandardError.ReadToEndAsync()",
+    "        if (-not $proc.WaitForExit($limit)) {",
+    "          try { $proc.Kill() } catch { }",
+    "          $code = 124",
+    "        } else {",
+    "          $code = $proc.ExitCode",
+    "        }",
+    "        $out = $outTask.Result",
+    "        $errText = $errTask.Result",
+    "        if ($errText -and $errText.Trim().Length -gt 0) {",
+    "          if ($out.Length -gt 0) { $out += $nl }",
+    "          $out += $errText",
+    "        }",
+    "      } catch {",
+    "        $out += ($_ | Out-String)",
+    "        $code = 1",
+    "      } finally {",
+    "        if ($bat -and (Test-Path $bat)) { Remove-Item $bat -Force -ErrorAction SilentlyContinue }",
+    "      }",
+    "    }",
+    "  }",
+    "",
+    "  $ms = [int]((Get-Date) - $start).TotalMilliseconds",
+    "  return [ordered]@{",
+    "    id = $jobId",
+    "    ok = ($code -eq 0)",
+    "    code = $code",
+    "    output = $out",
+    "    cwd = $cwdOut",
+    "    shell = $shellName",
+    "    action = $action",
+    "    duration = $ms",
+    "  }",
+    "}",
+    "",
+    "function Read-Http($stream) {",
+    "  $buf = New-Object byte[] 8192",
+    "  $ms = New-Object System.IO.MemoryStream",
+    "  $end = -1",
+    "  $text = ''",
+    "  while ($end -lt 0) {",
+    "    $n = $stream.Read($buf, 0, $buf.Length)",
+    "    if ($n -le 0) { return $null }",
+    "    $ms.Write($buf, 0, $n)",
+    "    $text = [Text.Encoding]::ASCII.GetString($ms.ToArray())",
+    "    $end = $text.IndexOf(\"`r`n`r`n\")",
+    "  }",
+    "  $head = $text.Substring(0, $end)",
+    "  $bodyStart = $end + 4",
+    "  $all = $ms.ToArray()",
+    "  $len = 0",
+    "  foreach ($line in ($head -split \"`r`n\")) {",
+    "    if ($line -match '^(?i)content-length:\\s*(\\d+)') { $len = [int]$matches[1] }",
+    "  }",
+    "  $body = New-Object byte[] $len",
+    "  $have = $all.Length - $bodyStart",
+    "  $got = 0",
+    "  if ($have -gt 0) {",
+    "    $got = [Math]::Min($have, $len)",
+    "    [Array]::Copy($all, $bodyStart, $body, 0, $got)",
+    "  }",
+    "  while ($got -lt $len) {",
+    "    $n = $stream.Read($body, $got, $len - $got)",
+    "    if ($n -le 0) { break }",
+    "    $got += $n",
+    "  }",
+    "  $first = ($head -split \"`r`n\")[0]",
+    "  $token = ''",
+    "  if ($head -match '(?im)^x-trojan-token:\\s*(\\S+)') { $token = $matches[1] }",
+    "  return @{ line = $first; body = $utf8.GetString($body); token = $token }",
+    "}",
+    "",
+    "function Send-Response($stream, [int]$status, [string]$statusText, [string]$body) {",
+    "  $bytes = $utf8.GetBytes($body)",
+    "  $head = \"HTTP/1.1 $status $statusText`r`nContent-Type: application/json; charset=utf-8`r`nAccess-Control-Allow-Origin: *`r`nAccess-Control-Allow-Headers: content-type, x-trojan-token`r`nAccess-Control-Allow-Methods: POST, GET, OPTIONS`r`nAccess-Control-Max-Age: 600`r`nContent-Length: $($bytes.Length)`r`nConnection: close`r`n`r`n\"",
+    "  $hb = [Text.Encoding]::ASCII.GetBytes($head)",
+    "  $stream.Write($hb, 0, $hb.Length)",
+    "  $stream.Write($bytes, 0, $bytes.Length)",
+    "  $stream.Flush()",
+    "}",
+    "",
+    "[IO.File]::WriteAllText((Join-Path $dir 'admin.txt'), [string]$isAdmin, $utf8)",
+    "[IO.File]::WriteAllText((Join-Path $dir 'pid.txt'), [string]$PID, $utf8)",
+    "$token = [guid]::NewGuid().ToString('N')",
+    "[IO.File]::WriteAllText((Join-Path $dir 'token.txt'), $token, $utf8)",
+    "",
+    "$listener = $null",
+    "$bound = 0",
+    "if ($Port -gt 0) {",
+    "  for ($p = $Port; $p -lt ($Port + 10); $p++) {",
+    "    try {",
+    "      $candidate = New-Object System.Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $p)",
+    "      $candidate.Start()",
+    "      $listener = $candidate",
+    "      $bound = $p",
+    "      break",
+    "    } catch { }",
+    "  }",
+    "}",
+    "[IO.File]::WriteAllText((Join-Path $dir 'port.txt'), [string]$bound, $utf8)",
+    "",
+    "while ($true) {",
+    "  $busy = $false",
+    "  try {",
+    "    if ($listener -and $listener.Pending()) {",
+    "      $busy = $true",
+    "      $client = $listener.AcceptTcpClient()",
+    "      try {",
+    "        $stream = $client.GetStream()",
+    "        $stream.ReadTimeout = 20000",
+    "        $stream.WriteTimeout = 20000",
+    "        $reqObj = Read-Http $stream",
+    "        if ($reqObj) {",
+    "          $line = [string]$reqObj.line",
+    "          if ($line -match '^OPTIONS') {",
+    "            Send-Response $stream 204 'No Content' ''",
+    "          } elseif ($line -match '^GET /health') {",
+    "            $payload = [ordered]@{ ok = $true; pid = $PID; admin = ($isAdmin -eq '1'); port = $bound } | ConvertTo-Json -Compress",
+    "            Send-Response $stream 200 'OK' $payload",
+    "          } elseif ($line -match '^POST /run') {",
+    "            if ([string]$reqObj.token -ne $token) {",
+    "              Send-Response $stream 403 'Forbidden' '{\"ok\":false,\"error\":\"token invalido\"}'",
+    "            } else {",
+    "              $job = $null",
+    "              try { $job = $reqObj.body | ConvertFrom-Json } catch { }",
+    "              if (-not $job) {",
+    "                Send-Response $stream 400 'Bad Request' '{\"ok\":false,\"error\":\"json invalido\"}'",
+    "              } else {",
+    "                $result = Invoke-Job ([string]$job.id) ([string]$job.command) ([string]$job.shell) ([string]$job.cwd)",
+    "                Send-Response $stream 200 'OK' ($result | ConvertTo-Json -Compress -Depth 4)",
+    "              }",
+    "            }",
+    "          } elseif ($line -match '^POST /kill') {",
+    "            Send-Response $stream 200 'OK' '{\"ok\":true}'",
+    "            try { $client.Close() } catch { }",
+    "            exit 0",
+    "          } else {",
+    "            Send-Response $stream 404 'Not Found' '{\"ok\":false}'",
+    "          }",
+    "        }",
+    "      } catch { } finally {",
+    "        try { $client.Close() } catch { }",
+    "      }",
+    "    }",
+    "  } catch { }",
+    "",
+    "  if (-not $busy) {",
+    "    try {",
+    "      [IO.File]::WriteAllText($beat, ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()).ToString(), $utf8)",
+    "      if (Test-Path $req) {",
+    "        $raw = ''",
+    "        for ($i = 0; $i -lt 20; $i++) {",
+    "          try { $raw = [IO.File]::ReadAllText($req, $utf8); break } catch { Start-Sleep -Milliseconds 40 }",
+    "        }",
+    "        if ($raw -and $raw.Trim().Length -gt 0) {",
+    "          $job = $null",
+    "          try { $job = $raw | ConvertFrom-Json } catch { }",
+    "          if ($job) {",
+    "            Remove-Item $req -Force -ErrorAction SilentlyContinue",
+    "            $result = Invoke-Job ([string]$job.id) ([string]$job.command) ([string]$job.shell) ([string]$job.cwd)",
+    "            $json = $result | ConvertTo-Json -Compress -Depth 4",
+    "            [IO.File]::WriteAllText((Join-Path $dir ('res-' + [string]$job.id + '.txt')), [Convert]::ToBase64String($utf8.GetBytes($json)), $utf8)",
+    "          }",
+    "        }",
+    "      }",
+    "    } catch { }",
+    "    Start-Sleep -Milliseconds 15",
+    "  }",
+    "}",
+  ].join('\n');
+
+  const TERM_SHELLS = ['ps', 'cmd', 'wsl'];
+
+  function psQuote(value) {
+    return `'${String(value === undefined || value === null ? '' : value).replace(/'/g, "''")}'`;
+  }
+
+  let termWslProbe = null;
+
+  function probeWsl() {
+    if (!termWslProbe) {
+      const script = [
+        '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)',
+        'try {',
+        '  $__psi = New-Object System.Diagnostics.ProcessStartInfo',
+        "  $__psi.FileName = 'wsl.exe'",
+        "  $__psi.Arguments = '-l -q'",
+        '  $__psi.UseShellExecute = $false',
+        '  $__psi.CreateNoWindow = $true',
+        '  $__psi.RedirectStandardOutput = $true',
+        '  $__psi.RedirectStandardError = $true',
+        '  $__proc = [System.Diagnostics.Process]::Start($__psi)',
+        '  $__task = $__proc.StandardOutput.ReadToEndAsync()',
+        "  if (-not $__proc.WaitForExit(8000)) { try { $__proc.Kill() } catch { }; 'NO'; exit 0 }",
+        '  $__body = $__task.Result',
+        "  if ($__proc.ExitCode -eq 0 -and $__body.Trim().Length -gt 0) { 'YES' } else { 'NO' }",
+        "} catch { 'NO' }",
+      ].join('\n');
+      termWslProbe = execLocal(script)
+        .then((info) => /YES/.test(info.text))
+        .catch(() => false);
+    }
+    return termWslProbe;
+  }
+
+  function b64Utf8(text) {
+    return btoa(unescape(encodeURIComponent(String(text))));
+  }
+
+  function b64Cp1252(text) {
+    const src = String(text);
+    let bin = '';
+    for (let i = 0; i < src.length; i += 1) {
+      const code = src.charCodeAt(i);
+      bin += String.fromCharCode(code <= 255 ? code : 63);
+    }
+    return btoa(bin);
+  }
+
+  function decodeBase64Utf8(text) {
+    const clean = String(text || '').trim();
+    if (!clean) return '';
+    const bin = atob(clean);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  function parseExecPayload(raw) {
+    const text = String(raw === undefined || raw === null ? '' : raw);
+    const head = /^exit_code:\s*(-?\d+)\s*\nduration_ms:\s*(\d+)\s*\n(?:\n)?/.exec(text);
+    if (!head) return { code: null, ms: null, out: text, err: '', text };
+    let body = text.slice(head[0].length);
+    let err = '';
+    const marker = '\n\nstderr:\n';
+    const idx = body.indexOf(marker);
+    if (idx >= 0) {
+      err = body.slice(idx + marker.length);
+      body = body.slice(0, idx);
+    }
+    if (body.indexOf('stdout:\n') === 0) body = body.slice(8);
+    if (body.trim() === '(vazio)') body = '';
+    if (err.trim() === '(vazio)') err = '';
+    return {
+      code: Number(head[1]),
+      ms: Number(head[2]),
+      out: body,
+      err,
+      text: `${body}${err ? (body ? '\n' : '') + err : ''}`,
+    };
+  }
+
+  async function execLocal(script) {
+    const data = await api('/api/exec', { method: 'POST', body: { command: script } });
+    return parseExecPayload(data.output);
+  }
+
+  function consumeTermMarkers(text) {
+    const lines = String(text || '').split(/\r?\n/);
+    const kept = [];
+    const result = { cwd: '', clear: false, text: '' };
+    lines.forEach((line) => {
+      if (line.indexOf('__CWD__') === 0) {
+        result.cwd = line.slice(7).trim();
+        return;
+      }
+      if (line.trim() === '__CLEAR__') {
+        result.clear = true;
+        return;
+      }
+      kept.push(line);
+    });
+    result.text = kept.join('\n').replace(/^\n+/, '').replace(/\s+$/, '');
+    return result;
+  }
+
+  function shortCwd() {
+    let path = state.termCwd || '';
+    if (!path) return '';
+    const home = /^[a-zA-Z]:\\Users\\[^\\]+/i.exec(path);
+    if (home) path = `~${path.slice(home[0].length)}`;
+    path = path.replace(/\\/g, '/');
+    if (path.length > 26) path = `…${path.slice(-25)}`;
+    return path;
+  }
+
+  function renderTermPrompt() {
+    if (!el.termPrompt) return;
+    const label = state.termShell === 'ps' ? 'PS' : state.termShell === 'cmd' ? 'CMD' : 'WSL';
+    const path = shortCwd();
+    el.termPrompt.textContent = `${path ? `${path} ` : ''}${label} ${state.termAdmin ? '#' : '>'}`;
+    el.termPrompt.title = state.termCwd || 'diretório inicial';
+    el.termPrompt.classList.toggle('admin', state.termAdmin);
+    if (el.termBadge) el.termBadge.hidden = !state.termAdmin;
+    if (el.termAdminToggle) {
+      el.termAdminToggle.setAttribute('aria-pressed', state.termAdmin ? 'true' : 'false');
+      el.termAdminToggle.classList.toggle('on', state.termAdmin);
+    }
+    if (el.termAdminLabel) el.termAdminLabel.textContent = state.termAdmin ? 'ADMIN' : 'usuário';
+    if (el.termTabs) {
+      Array.prototype.forEach.call(el.termTabs.querySelectorAll('.term-tab'), (tab) => {
+        tab.classList.toggle('active', tab.dataset.shell === state.termShell);
+      });
+    }
+  }
+
+  function setTermShell(shell) {
+    if (!TERM_SHELLS.includes(shell)) return;
+    if (shell === 'wsl') {
+      probeWsl().then((available) => {
+        if (available) return;
+        toast('WSL não está disponível neste PC.', 'error');
+        if (el.termTabs) {
+          const tab = el.termTabs.querySelector('.term-tab[data-shell="wsl"]');
+          if (tab) tab.hidden = true;
+        }
+        if (state.termShell === 'wsl') {
+          state.termShell = 'ps';
+          renderTermPrompt();
+        }
+      });
+    }
+    state.termShell = shell;
+    try {
+      localStorage.setItem('trojan.term.shell', shell);
+    } catch {
+      /* storage indisponível */
+    }
+    renderTermPrompt();
+  }
+
   function toggleTerminal(force) {
     const open = force === undefined ? !state.termOpen : !!force;
     state.termOpen = open;
     el.terminalPanel.classList.toggle('open', open);
     el.terminalPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     el.terminalChip.classList.toggle('active', open);
-    if (open) setTimeout(() => el.termInput.focus(), 340);
+    if (open) {
+      renderTermPrompt();
+      setTimeout(() => el.termInput.focus(), 340);
+    }
   }
 
-  function termEntry(command) {
+  function termNote(text) {
+    const line = document.createElement('div');
+    line.className = 'term-note';
+    line.textContent = String(text);
+    el.termLog.append(line);
+    el.termLog.scrollTop = el.termLog.scrollHeight;
+  }
+
+  function termEntry(command, admin, shell) {
     const entry = document.createElement('div');
-    entry.className = 'term-entry';
+    entry.className = `term-entry${admin ? ' admin' : ''}`;
+    const tag = shell === 'ps' ? 'PS' : shell === 'cmd' ? 'CMD' : 'WSL';
     entry.innerHTML =
-      `<div class="term-cmd"><span class="p">PS&gt;</span><span class="cmd-text"></span></div>` +
+      `<div class="term-cmd"><span class="p">${escapeHtml(tag)} ${admin ? '#' : '&gt;'}</span><span class="cmd-text"></span></div>` +
       `<div class="term-running"><span class="spin"></span><span>executando…</span></div>`;
     entry.querySelector('.cmd-text').textContent = command;
     el.termLog.append(entry);
@@ -3812,26 +4276,379 @@
     el.termLog.scrollTop = el.termLog.scrollHeight;
   }
 
+  const TERM_PROFILES = {
+    user: { folder: 'trojan-shell-user', elevate: false, port: 4318 },
+    admin: { folder: 'trojan-shell', elevate: true, port: 4319 },
+  };
+
+  function ensureWorkerScript(profile) {
+    const conf = TERM_PROFILES[profile];
+    const workerB64 = b64Utf8(TERM_WORKER_SOURCE);
+    const argList = `('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$script,'-Port','${conf.port}')`;
+    const startLine = conf.elevate
+      ? `  Start-Process -FilePath 'powershell.exe' -Verb RunAs -WindowStyle Hidden -ArgumentList ${argList}`
+      : `  Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList ${argList}`;
+    return [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$d = Join-Path $env:TEMP ${psQuote(conf.folder)}`,
+      'New-Item -ItemType Directory -Path $d -Force | Out-Null',
+      "$script = Join-Path $d 'worker.ps1'",
+      "$ver = Join-Path $d 'worker.ver'",
+      `$marker = ${psQuote(TERM_WORKER_VERSION)}`,
+      "$current = ''",
+      'if (Test-Path $ver) { $current = (Get-Content $ver -Raw).Trim() }',
+      'if ($current -ne $marker) {',
+      `  [IO.File]::WriteAllBytes($script, [Convert]::FromBase64String(${psQuote(workerB64)}))`,
+      '  Set-Content -Path $ver -Value $marker -Encoding ASCII',
+      '}',
+      'function Get-WorkerMeta {',
+      "  $pf = Join-Path $d 'pid.txt'",
+      "  $xf = Join-Path $d 'port.txt'",
+      "  $tf = Join-Path $d 'token.txt'",
+      '  if (-not (Test-Path $pf)) { return $null }',
+      '  if (-not (Test-Path $xf)) { return $null }',
+      '  if (-not (Test-Path $tf)) { return $null }',
+      "  $raw = ''",
+      '  try { $raw = (Get-Content $pf -Raw).Trim() } catch { return $null }',
+      '  $n = 0',
+      '  if (-not [int]::TryParse($raw, [ref]$n)) { return $null }',
+      '  if (-not (Get-Process -Id $n -ErrorAction SilentlyContinue)) { return $null }',
+      "  $port = ''",
+      "  $token = ''",
+      '  try { $port = (Get-Content $xf -Raw).Trim() } catch { }',
+      '  try { $token = (Get-Content $tf -Raw).Trim() } catch { }',
+      "  return ('READY ' + $n + ' ' + $port + ' ' + $token)",
+      '}',
+      '$ready = Get-WorkerMeta',
+      'if ($ready) { $ready; exit 0 }',
+      "Remove-Item (Join-Path $d 'pid.txt'),(Join-Path $d 'port.txt'),(Join-Path $d 'token.txt') -Force -ErrorAction SilentlyContinue",
+      'try {',
+      startLine,
+      '} catch {',
+      "  'FAIL ' + $_.Exception.Message",
+      '  exit 0',
+      '}',
+      '$deadline = (Get-Date).AddSeconds(55)',
+      'while ((Get-Date) -lt $deadline) {',
+      '  Start-Sleep -Milliseconds 250',
+      '$ready = Get-WorkerMeta',
+      '  if ($ready) { $ready; exit 0 }',
+      '}',
+      conf.elevate ? "'FAIL tempo esgotado aguardando o UAC'" : "'FAIL o shell não iniciou'",
+    ].join('\n');
+  }
+
+  function workerWaitScript(profile, id, waitMs) {
+    return [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$d = Join-Path $env:TEMP ${psQuote(TERM_PROFILES[profile].folder)}`,
+      "$pf = Join-Path $d 'pid.txt'",
+      '$alive = $false',
+      'if (Test-Path $pf) {',
+      "  $rawPid = ''",
+      '  try { $rawPid = (Get-Content $pf -Raw).Trim() } catch { }',
+      '  $n = 0',
+      '  if ([int]::TryParse($rawPid, [ref]$n)) { if (Get-Process -Id $n -ErrorAction SilentlyContinue) { $alive = $true } }',
+      '}',
+      "if (-not $alive) { 'DEAD'; exit 0 }",
+      `$res = Join-Path $d ${psQuote(`res-${id}.txt`)}`,
+      `$deadline = (Get-Date).AddMilliseconds(${Math.max(1000, waitMs | 0)})`,
+      'while (-not (Test-Path $res) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 60 }',
+      'if (Test-Path $res) {',
+      "  $body = ''",
+      '  try { $body = [IO.File]::ReadAllText($res) } catch { }',
+      '  Remove-Item $res -Force -ErrorAction SilentlyContinue',
+      "  'OK ' + $body",
+      '} else {',
+      "  'PENDING'",
+      '}',
+    ].join('\n');
+  }
+
+  function workerSubmitScript(profile, id, command, shell, cwd) {
+    const job = b64Utf8(JSON.stringify({ id, command, shell, cwd: cwd || '' }));
+    return [
+      "$ErrorActionPreference = 'SilentlyContinue'",
+      `$d = Join-Path $env:TEMP ${psQuote(TERM_PROFILES[profile].folder)}`,
+      'New-Item -ItemType Directory -Path $d -Force | Out-Null',
+      `$job = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(${psQuote(job)}))`,
+      "Remove-Item (Join-Path $d 'req.txt') -Force -ErrorAction SilentlyContinue",
+      "[IO.File]::WriteAllText((Join-Path $d 'req.txt'), $job, (New-Object System.Text.UTF8Encoding($false)))",
+      workerWaitScript(profile, id, 20000).split('\n').slice(2).join('\n'),
+    ].join('\n');
+  }
+
+  async function ensureWorkerSession(profile) {
+    const info = await execLocal(ensureWorkerScript(profile));
+    const ready = /READY\s+(\d+)\s+(\d+)\s+([0-9a-fA-F]*)/.exec(info.text);
+    if (ready) {
+      state.termPids[profile] = Number(ready[1]);
+      state.termPorts[profile] = Number(ready[2]) || 0;
+      state.termTokens[profile] = ready[3] || '';
+      return state.termPids[profile];
+    }
+    const fail = /FAIL\s*(.*)/.exec(info.text);
+    throw new Error(fail ? fail[1].trim() : 'não foi possível abrir o shell');
+  }
+
+  async function runHttpCommand(profile, command, shell) {
+    const port = state.termPorts[profile];
+    const token = state.termTokens[profile] || '';
+    if (!port) throw new Error('sem porta');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), shell === 'wsl' ? 150000 : 900000);
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-trojan-token': token },
+        body: JSON.stringify({ id: makeId('h'), command, shell, cwd: state.termCwd }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return {
+        ok: !!data.ok,
+        output: String(data.output || ''),
+        action: data.action || 'run',
+        cwd: data.cwd || state.termCwd,
+        meta: { exitCode: data.code, duration: data.duration },
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function runWorkerCommand(profile, command, shell) {
+    if (!state.termPids[profile]) await ensureWorkerSession(profile);
+    if (state.termPorts[profile]) {
+      try {
+        return await runHttpCommand(profile, command, shell);
+      } catch {
+        /* socket indisponível — cai para o protocolo de arquivos */
+      }
+    }
+    const id = makeId('j');
+    let info = await execLocal(workerSubmitScript(profile, id, command, shell, state.termCwd));
+    let raw = (info.text || '').trim();
+    let guard = 0;
+    while (!raw.startsWith('OK ') && raw !== 'DEAD' && guard < 40) {
+      guard += 1;
+      if (raw && !raw.startsWith('PENDING')) break;
+      info = await execLocal(workerWaitScript(profile, id, 18000));
+      raw = (info.text || '').trim();
+    }
+    if (raw === 'DEAD') {
+      state.termPids[profile] = 0;
+      throw new Error(
+        profile === 'admin'
+          ? 'sessão elevada encerrada — reative o modo admin'
+          : 'o shell encerrou — tente novamente',
+      );
+    }
+    if (!raw.startsWith('OK ')) throw new Error('sem resposta do shell');
+    const data = JSON.parse(decodeBase64Utf8(raw.slice(3)));
+    return {
+      ok: !!data.ok,
+      output: String(data.output || ''),
+      action: data.action || 'run',
+      cwd: data.cwd || state.termCwd,
+      meta: { exitCode: data.code, duration: data.duration },
+    };
+  }
+
+  function wrappedShellScript(shell, command) {
+    const id = makeId('x');
+    const lines = [
+      '$__oem = [Console]::OutputEncoding',
+      '$__utf8 = New-Object System.Text.UTF8Encoding($false)',
+      '$__stdout = [Console]::OpenStandardOutput()',
+      'function __emit([string]$__s) { $__b = $__utf8.GetBytes($__s); $__stdout.Write($__b, 0, $__b.Length); $__stdout.Flush() }',
+      `$__dir = Join-Path $env:TEMP ${psQuote(TERM_TEMP_FOLDER)}`,
+      'New-Item -ItemType Directory -Path $__dir -Force | Out-Null',
+      `$__cmd = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(${psQuote(b64Utf8(command))}))`,
+      `$__cwd = ${psQuote(state.termCwd || '')}`,
+      'if (-not $__cwd) { $__cwd = $env:USERPROFILE }',
+      '$__text = $__cmd.Trim()',
+      `$__isCd = $__text -match '^(?i)cd(\\s.*)?$'`,
+      'if ($__isCd) {',
+      '  $__target = $__text.Substring(2).Trim()',
+      '  if (-not $__target) { $__target = $env:USERPROFILE }',
+      '  try {',
+      '    $__target = $ExecutionContext.InvokeCommand.ExpandString($__target)',
+      '    Push-Location -LiteralPath $__cwd -ErrorAction SilentlyContinue',
+      '    $__res = (Resolve-Path -LiteralPath $__target -ErrorAction Stop).Path',
+      '    Pop-Location -ErrorAction SilentlyContinue',
+      '    if (Test-Path -LiteralPath $__res -PathType Leaf) { $__res = Split-Path -Parent $__res }',
+      "    __emit ('__CWD__' + $__res)",
+      '    exit 0',
+      '  } catch {',
+      "    __emit ('cd: ' + $_.Exception.Message)",
+      '    exit 1',
+      '  }',
+      '}',
+      `$__isClear = $__text -match '^(?i)(clear|cls)$'`,
+      "if ($__isClear) { __emit '__CLEAR__'; exit 0 }",
+    ];
+
+    if (shell === 'cmd') {
+      lines.push(`$__file = Join-Path $__dir ${psQuote(`x-${id}.cmd`)}`);
+      lines.push(`$__body = '@echo off' + [Environment]::NewLine + ${psQuote(command)} + [Environment]::NewLine`);
+      lines.push('[IO.File]::WriteAllText($__file, $__body, $__oem)');
+      lines.push("$__exe = 'cmd.exe'");
+      lines.push("$__argLine = '/d /s /c \"' + $__file + '\"'");
+    } else if (shell === 'wsl') {
+      const inner = b64Utf8(command);
+      lines.push("$__exe = 'wsl.exe'");
+      lines.push(`$__argLine = '-e sh -lc "echo ${inner} | base64 -d | sh"'`);
+    }
+
+    lines.push('$__code = 0');
+    lines.push("$__out = ''");
+
+    if (shell === 'ps') {
+      lines.push('$__prevErr = $Error.Count');
+      lines.push('$global:LASTEXITCODE = 0');
+      lines.push('try { Set-Location -LiteralPath $__cwd -ErrorAction Stop } catch { }');
+      lines.push('try {');
+      lines.push('  $__sb = [scriptblock]::Create($__cmd)');
+      lines.push('  $__out = (& $__sb 2>&1 | Out-String -Width 4096)');
+      lines.push('} catch {');
+      lines.push('  $__out += ($_ | Out-String)');
+      lines.push('}');
+      lines.push('if ($LASTEXITCODE -ne 0) { $__code = [int]$LASTEXITCODE } elseif ($Error.Count -gt $__prevErr) { $__code = 1 }');
+      lines.push('__emit $__out');
+      lines.push('exit $__code');
+      return lines.join('\n');
+    }
+
+    lines.push('try {');
+    lines.push('  $__psi = New-Object System.Diagnostics.ProcessStartInfo');
+    lines.push('  $__psi.FileName = $__exe');
+    lines.push('  $__psi.Arguments = $__argLine');
+    lines.push('  $__psi.WorkingDirectory = $__cwd');
+    lines.push('  $__psi.UseShellExecute = $false');
+    lines.push('  $__psi.CreateNoWindow = $true');
+    lines.push('  $__psi.RedirectStandardOutput = $true');
+    lines.push('  $__psi.RedirectStandardError = $true');
+    if (shell === 'cmd') {
+      lines.push('  $__psi.StandardOutputEncoding = $__oem');
+      lines.push('  $__psi.StandardErrorEncoding = $__oem');
+    } else {
+      lines.push('  $__psi.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)');
+      lines.push('  $__psi.StandardErrorEncoding = [Text.UTF8Encoding]::new($false)');
+    }
+    lines.push('  $__proc = [System.Diagnostics.Process]::Start($__psi)');
+    lines.push('  $__outTask = $__proc.StandardOutput.ReadToEndAsync()');
+    lines.push('  $__errTask = $__proc.StandardError.ReadToEndAsync()');
+    lines.push(`  $__limit = ${shell === 'wsl' ? 120000 : 600000}`);
+    lines.push('  if (-not $__proc.WaitForExit($__limit)) { try { $__proc.Kill() } catch { }; $__code = 124 } else { $__code = $__proc.ExitCode }');
+    lines.push('  $__out = $__outTask.Result');
+    lines.push('  $__err = $__errTask.Result');
+    lines.push('  if ($__err -and $__err.Trim().Length -gt 0) { if ($__out.Length -gt 0) { $__out += [Environment]::NewLine }; $__out += $__err }');
+    lines.push('} catch {');
+    lines.push('  $__out = $_ | Out-String');
+    lines.push('  $__code = 1');
+    lines.push('}');
+    lines.push('Remove-Item $__file -Force -ErrorAction SilentlyContinue');
+    lines.push('__emit $__out');
+    lines.push('exit $__code');
+    return lines.join('\n');
+  }
+
+  async function runLocalCommand(command, shell) {
+    try {
+      if (!state.termPids.user) await ensureWorkerSession('user');
+    } catch {
+      const info = await execLocal(wrappedShellScript(shell, command));
+      return {
+        ok: info.code === 0,
+        output: info.out,
+        action: 'run',
+        cwd: state.termCwd,
+        meta: { exitCode: info.code, duration: info.ms },
+      };
+    }
+    return runWorkerCommand('user', command, shell);
+  }
+
+  async function setTermAdmin(force) {
+    const target = force === undefined ? !state.termAdmin : !!force;
+    if (!target) {
+      state.termAdmin = false;
+      renderTermPrompt();
+      termNote('modo usuário — comandos voltam a rodar sem elevação');
+      return false;
+    }
+    if (state.termAdmin) return true;
+    if (state.termElevating) return false;
+    state.termElevating = true;
+    if (el.termAdminToggle) el.termAdminToggle.classList.add('busy');
+    termNote('abrindo shell elevado — aprove o UAC');
+    try {
+      await ensureWorkerSession('admin');
+      state.termAdmin = true;
+      termNote('sessão elevada ativa — comandos agora rodam como administrador');
+      toast('Shell elevado ativo.');
+      return true;
+    } catch (err) {
+      state.termAdmin = false;
+      termNote(`elevação falhou: ${(err && err.message) || err}`);
+      toast(`Elevação falhou: ${(err && err.message) || err}`, 'error');
+      return false;
+    } finally {
+      state.termElevating = false;
+      if (el.termAdminToggle) el.termAdminToggle.classList.remove('busy');
+      renderTermPrompt();
+    }
+  }
+
+  function applyTermResult(entry, result) {
+    const parsed = consumeTermMarkers(result.output || '');
+    if (parsed.cwd) state.termCwd = parsed.cwd;
+    if (result.cwd && !parsed.cwd) state.termCwd = result.cwd;
+    if (parsed.clear) {
+      clearTerminal();
+      renderTermPrompt();
+      return;
+    }
+    termFinish(entry, { ok: result.ok, output: parsed.text, meta: result.meta });
+    renderTermPrompt();
+    if (el.termLed) {
+      el.termLed.classList.add('done');
+      setTimeout(() => el.termLed.classList.remove('done'), 700);
+    }
+  }
+
   function sendTermCommand(raw) {
     const command = String(raw || '').trim();
     if (!command) return;
-    if (!state.wsReady) {
-      toast('Servidor local offline. Reinicie o Trojan.', 'error');
-      return;
-    }
     if (state.termHistory[state.termHistory.length - 1] !== command) {
       state.termHistory.push(command);
-      if (state.termHistory.length > 80) state.termHistory.shift();
+      if (state.termHistory.length > 120) state.termHistory.shift();
     }
     state.termIndex = -1;
 
-    const id = makeId('exec');
-    const entry = termEntry(command);
-    state.execEntries.set(id, entry);
-    if (!wsSend({ type: 'exec', id, command })) {
-      state.execEntries.delete(id);
-      termFinish(entry, { ok: false, output: 'Servidor local offline.' });
-    }
+    const shell = state.termShell;
+    const admin = state.termAdmin;
+    const entry = termEntry(command, admin, shell);
+    state.termQueue = state.termQueue
+      .then(async () => {
+        if (admin && !state.termPids.admin) {
+          const ok = await setTermAdmin(true);
+          if (!ok) throw new Error('elevação cancelada');
+        }
+        const result = admin
+          ? await runWorkerCommand('admin', command, shell)
+          : await runLocalCommand(command, shell);
+        applyTermResult(entry, result);
+      })
+      .catch((err) => {
+        termFinish(entry, { ok: false, output: `erro: ${(err && err.message) || err}` });
+      });
+  }
+
+  function clearTerminal() {
+    el.termLog.innerHTML = `<div class="term-welcome">${TERM_WELCOME}</div>`;
   }
 
   function onExecResult(event) {
@@ -3843,10 +4660,6 @@
       el.termLed.classList.add('done');
       setTimeout(() => el.termLed.classList.remove('done'), 700);
     }
-  }
-
-  function clearTerminal() {
-    el.termLog.innerHTML = `<div class="term-welcome">${TERM_WELCOME}</div>`;
   }
 
   /* ============================================================
@@ -4368,6 +5181,23 @@
 if (el.reWorkbenchBtn) el.reWorkbenchBtn.addEventListener('click', openReWorkbench);
     el.closeTerm.addEventListener('click', () => toggleTerminal(false));
     el.clearTerm.addEventListener('click', clearTerminal);
+    if (el.termTabs) {
+      el.termTabs.addEventListener('click', (event) => {
+        const tab = event.target.closest('.term-tab');
+        if (!tab || !tab.dataset.shell) return;
+        setTermShell(tab.dataset.shell);
+        el.termInput.focus();
+      });
+    }
+    if (el.termAdminToggle) el.termAdminToggle.addEventListener('click', () => setTermAdmin());
+    if (el.termElevate) el.termElevate.addEventListener('click', () => setTermAdmin(true));
+    try {
+      const savedShell = localStorage.getItem('trojan.term.shell');
+      if (savedShell && TERM_SHELLS.includes(savedShell)) setTermShell(savedShell);
+    } catch {
+      /* storage indisponível */
+    }
+    renderTermPrompt();
 
     el.termForm.addEventListener('submit', (event) => {
       event.preventDefault();
